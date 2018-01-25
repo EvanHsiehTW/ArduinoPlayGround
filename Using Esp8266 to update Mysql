@@ -1,0 +1,187 @@
+
+#include <dht11.h>      // DHT11 感測器程式庫
+#include <Wire.h> 
+#include <LiquidCrystal_I2C.h>
+LiquidCrystal_I2C lcd(0x27,16,2);  // set the LCD address to 0x27 for a 16 chars and 2 line display
+#include <SoftwareSerial.h>
+#include "WiFiEsp.h"
+SoftwareSerial esp8266(6, 7);// RX, TX
+
+float temp;
+int hum;
+String tempC;
+int error;
+int count=0;
+
+
+
+//#define SSID "*********"      // "SSID-WiFiname" 
+//#define PASS "*********"       // "password"
+
+char ssid[] = "Xperia X_39c6";      // "SSID-WiFiname" 
+char pass[] = "111111ee";       // "password"
+//#define IP "api.thingspeak.com"// thingspeak.com ip
+//String GET = "GET /update?key=I1ABCVHVQSC8HUP9"; //change it with your key...
+int status = WL_IDLE_STATUS;
+
+char server[] = "140.130.19.38";
+
+
+unsigned long lastConnectionTime = 0;         // last time you connected to the server, in milliseconds
+const unsigned long postingInterval = 5000L; // delay between updates, in milliseconds
+
+// Initialize the Ethernet client object
+WiFiEspClient client;
+
+
+
+
+dht11 DHT11;     // 宣告溫濕度檢測器程式物件
+const byte dataPin = 2;
+
+void setup() {
+pinMode(8,OUTPUT);
+  
+
+  
+  Serial.begin(9600);
+  esp8266.begin(115200);
+  //esp8266.println("AT+RST");
+  delay(500);
+ Serial.println("ReStart LCD");
+ delay(50);
+  
+  lcd.init();    
+  lcd.backlight();
+  lcd.begin(16, 2);       // 初始化 LCD
+ 
+  lcd.setCursor(4, 0);
+  lcd.print("Temp");
+  lcd.setCursor(0, 1);
+  lcd.print("Humidity");
+  Serial.println("Ready");
+  
+  //esp8266.println("AT");
+  
+  WiFi.init(&esp8266);
+  
+  
+  /*
+  // check for the presence of the shield
+  if (WiFi.status() == WL_NO_SHIELD) {
+    Serial.println("WiFi shield not present");
+    // don't continue
+    while (true);
+  }
+  */
+
+  // attempt to connect to WiFi network
+  while ( status != WL_CONNECTED) {
+    Serial.print("Attempting to connect to WPA SSID: ");
+    Serial.println(ssid);
+    // Connect to WPA/WPA2 network
+    status = WiFi.begin(ssid, pass);
+  }
+
+  Serial.println("You're connected to the network");
+  
+  printWifiStatus();
+}
+
+
+
+void loop() {
+   
+  
+
+int chk = DHT11.read(dataPin);
+  if (chk == 0) {
+    char buffer[5]="";
+    lcd.setCursor(9, 0);   // 顯示溫度
+    lcd.print(dtostrf(DHT11.temperature, 4, 1, buffer));
+    lcd.print((char) 0xDF);
+    lcd.print("C");
+   
+    lcd.setCursor(9, 1);   // 顯示濕度
+    lcd.print((float)DHT11.humidity, 2);
+    lcd.print("%");    
+     }
+  //start: //label 
+  //error=0;
+  
+hum=DHT11.humidity;
+
+char buffer[5]="";
+  // there is a useful c function called dtostrf() which will convert a float to a char array 
+  //so it can then be printed easily.  The format is: dtostrf(floatvar, StringLengthIncDecimalPoint, numVarsAfterDecimal, charbuf);
+  tempC = dtostrf(DHT11.temperature, 4, 1, buffer); 
+  
+
+
+
+  
+if (millis() - lastConnectionTime > postingInterval) {
+    httpRequest();
+  }
+  
+
+
+}
+
+
+
+void httpRequest()
+{
+  Serial.println();
+    
+  // close any connection before send a new request
+  // this will free the socket on the WiFi shield
+  client.stop();
+
+  // if there's a successful connection
+  if (client.connect(server, 58136)) {
+    Serial.println("Connecting...");
+    Serial.println(client.read());
+    digitalWrite(8,HIGH);
+    // send the HTTP PUT request
+    
+    String cmx="GET /~g02/r_get.php?humi=";
+    cmx+=hum;
+    cmx+="&temp=";
+    cmx+=tempC;
+    //cmx+=" HTTP/1.1";
+    
+    //client.println(cmx);
+    client.println(F("GET /~g02/Evan/index-2.php"));
+    client.println(F("Host: 140.130.19.38"));
+    client.println("Connection: close");
+    client.println();
+
+    // note the time that the connection was made
+    lastConnectionTime = millis();
+  }
+  else {
+    // if you couldn't make a connection
+    Serial.println("Connection failed");
+  }
+}
+
+
+
+void printWifiStatus()
+{
+  // print the SSID of the network you're attached to
+  Serial.print("SSID: ");
+  Serial.println(WiFi.SSID());
+
+  // print your WiFi shield's IP address
+  IPAddress ip = WiFi.localIP();
+  Serial.print("IP Address: ");
+  Serial.println(ip);
+
+  // print the received signal strength
+  long rssi = WiFi.RSSI();
+  Serial.print("Signal strength (RSSI):");
+  Serial.print(rssi);
+  Serial.println(" dBm");
+}
